@@ -218,4 +218,7 @@ local GamesTab = Window:CreateTab("Games", 4483362458)
 local JJLabel = GamesTab:CreateLabel("Jujutsu Infinite", 4483362458, Color3.fromRGB(255, 255, 255), false) -- Title, Icon, Color, IgnoreTheme
 local UDJJLabel = GamesTab:CreateLabel("Undetected", 4483362458, Color3.fromRGB(0, 255, 82), false) -- Title, Icon, Color, IgnoreTheme
 local Divider1 = GamesTab:CreateDivider()
+local NightLabel = GamesTab:CreateLabel("99 Nights in The Forest", 4483362458, Color3.fromRGB(255, 255, 255), false) -- Title, Icon, Color, IgnoreTheme
+local UD99Label = GamesTab:CreateLabel("Undetected", 4483362458, Color3.fromRGB(0, 255, 82), false) -- Title, Icon, Color, IgnoreTheme
+local Divider2 = GamesTab:CreateDivider()
 Rayfield:LoadConfiguration()
