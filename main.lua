@@ -13,7 +13,7 @@
 
 -- ─── CONFIG ──────────────────────────────────────────────────────────────────
 local API_URL     = "https://api-ya-omega.vercel.app/"     -- ⚠️ Change ici
-local HMAC_SECRET = "YOUYOULEBG"  -- ⚠️ Doit correspondre à celui de l'API
+local HMAC_SECRET = "PUOFZQGESQF454SGER6G4E64GE4GGG"  -- ⚠️ Doit correspondre à celui de l'API
 
 -- ─── RAYFIELD ────────────────────────────────────────────────────────────────
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
