@@ -110,8 +110,10 @@ local function hmacSha256(key, msg)
 end
 
 local function signPayload(key_str, hwid, game_id)
-    -- JSON trié par clé : game_id, hwid, key
-    local raw = string.format('{"game_id":"%s","hwid":"%s","key":"%s"}', game_id, hwid, key_str)
+    -- JSON trié par clé (sort_keys=True Python) : game_id, hwid, key
+    -- On échappe les caractères qui pourraient casser le JSON
+    local function esc(s) return tostring(s):gsub('\', '\\'):gsub('"', '\"') end
+    local raw = string.format('{"game_id":"%s","hwid":"%s","key":"%s"}', esc(game_id), esc(hwid), esc(key_str))
     return hmacSha256(HMAC_SECRET, raw)
 end
 
@@ -261,7 +263,7 @@ local Window = Rayfield:CreateWindow({
     LoadingTitle           = "YA HUB is loading...",
     LoadingSubtitle        = "by Artemis & YouYou",
     ShowText               = "YA",
-    Theme                  = "DarkBlue",
+    Theme                  = "Bloom",
     ToggleUIKeybind        = "K",
     DisableRayfieldPrompts = false,
     DisableBuildWarnings   = false,
