@@ -128,24 +128,57 @@ local function getGameID()
     return tostring(game.PlaceId)
 end
 
--- ─── HTTP POST ────────────────────────────────────────────────────────────────
+-- HTTP POST (compatible tous executors)
 local function httpPost(endpoint, payload)
+    local body = HttpService:JSONEncode(payload)
+    local url  = API_URL .. endpoint
+
+    -- Méthode 1 : request() — Synapse, KRNL, Delta, Fluxus
     local ok, result = pcall(function()
-        return HttpService:RequestAsync({
-            Url     = API_URL .. endpoint,
+        return request({
+            Url     = url,
             Method  = "POST",
             Headers = {["Content-Type"] = "application/json"},
-            Body    = HttpService:JSONEncode(payload),
+            Body    = body,
         })
     end)
-    if not ok then return nil, "Erreur reseau" end
-    if result.StatusCode ~= 200 then
-        local msg = "Erreur serveur " .. tostring(result.StatusCode)
-        local ok2, decoded = pcall(HttpService.JSONDecode, HttpService, result.Body)
+
+    -- Méthode 2 : http.request() — fallback
+    if not ok then
+        ok, result = pcall(function()
+            return http.request({
+                Url     = url,
+                Method  = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body    = body,
+            })
+        end)
+    end
+
+    -- Méthode 3 : HttpService:RequestAsync() — dernier recours
+    if not ok then
+        ok, result = pcall(function()
+            return HttpService:RequestAsync({
+                Url     = url,
+                Method  = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body    = body,
+            })
+        end)
+    end
+
+    if not ok then return nil, "Erreur reseau : " .. tostring(result) end
+
+    local status = result.StatusCode or result.status_code or result.statusCode or 0
+    if status ~= 200 then
+        local msg = "Erreur serveur " .. tostring(status)
+        local ok2, decoded = pcall(HttpService.JSONDecode, HttpService, result.Body or result.body or "")
         if ok2 and decoded and decoded.detail then msg = decoded.detail end
         return nil, msg
     end
-    local ok3, data = pcall(HttpService.JSONDecode, HttpService, result.Body)
+
+    local respBody = result.Body or result.body or ""
+    local ok3, data = pcall(HttpService.JSONDecode, HttpService, respBody)
     if not ok3 then return nil, "Reponse invalide" end
     return data, nil
 end
@@ -228,7 +261,7 @@ local Window = Rayfield:CreateWindow({
     LoadingTitle           = "YA HUB is loading...",
     LoadingSubtitle        = "by Artemis & YouYou",
     ShowText               = "YA",
-    Theme                  = "Bloom",
+    Theme                  = "DarkBlue",
     ToggleUIKeybind        = "K",
     DisableRayfieldPrompts = false,
     DisableBuildWarnings   = false,
