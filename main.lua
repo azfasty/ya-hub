@@ -230,58 +230,58 @@ end
 
 -- ─── UI RAYFIELD ─────────────────────────────────────────────────────────────
 local Window = Rayfield:CreateWindow({
-    Name                  = "YA HUB - LOADER",
-    Icon                  = 0,
-    LoadingTitle          = "YA HUB is loading...",
-    LoadingSubtitle       = "by Artemis & YouYou",
-    ShowText              = "YA",
-    Theme                 = "Bloom",
-    ToggleUIKeybind       = "K",
-    DisableRayfieldPrompts= false,
-    DisableBuildWarnings  = false,
-    ConfigurationSaving   = {
+    Name                   = "YA HUB - LOADER",
+    Icon                   = 0,
+    LoadingTitle           = "YA HUB is loading...",
+    LoadingSubtitle        = "by Artemis & YouYou",
+    ShowText               = "YA",
+    Theme                  = "Bloom",
+    ToggleUIKeybind        = "K",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings   = false,
+    ConfigurationSaving    = {
         Enabled    = true,
         FolderName = "YAHUB",
         FileName   = "YAHUB"
     },
     Discord = {
-        Enabled      = true,
-        Invite       = "X28Ffjm3Yb",
-        RememberJoins= true
+        Enabled       = true,
+        Invite        = "X28Ffjm3Yb",
+        RememberJoins = true
     },
-    KeySystem    = false,
-    KeySettings  = {
-        Title             = "YA",
-        Subtitle          = "Key System",
-        Note              = "Rejoins notre Discord pour obtenir une clé",
-        FileName          = "Key",
-        SaveKey           = true,
-        GrabKeyFromSite   = false,
-        Key               = {"Hello"}
+    KeySystem   = false,
+    KeySettings = {
+        Title           = "YA",
+        Subtitle        = "Key System",
+        Note            = "Rejoins notre Discord pour obtenir une clé",
+        FileName        = "Key",
+        SaveKey         = true,
+        GrabKeyFromSite = false,
+        Key             = {"Hello"}
     }
 })
 
-local Tab     = Window:CreateTab("🔑 KEY SYSTEM", 4483362458)
-local Section = Tab:CreateSection("Activation")
+local Tab = Window:CreateTab("KEY SYSTEM", 4483362458)
+Tab:CreateSection("Activation")
 
--- Champ de saisie de la clé
 local savedKey = ""
+
 Tab:CreateInput({
-    Name        = "Entrez votre clé",
-    Info        = "Format : LIFETIME-XXXX / MONTH-XXXX / WEEK-XXXX / 8H-XXXX",
-    PlaceholderText = "Votre clé YA HUB",
+    Name                     = "Entrez votre cle",
+    CurrentValue             = "",
+    PlaceholderText          = "LIFETIME-XXXX / MONTH-XXXX / WEEK-XXXX / 8H-XXXX",
     RemoveTextAfterFocusLost = false,
-    Callback    = function(value)
-        savedKey = value
+    Flag                     = "KeyInput",
+    Callback                 = function(Text)
+        savedKey = Text
     end,
 })
 
 Tab:CreateButton({
-    Name     = "✅ Valider la clé",
-    Info     = "Vérifie ta clé et charge le script",
+    Name     = "Valider la cle",
     Callback = function()
         if savedKey == "" then
-            notifyError("❌ Clé vide", "Entre ta clé avant de valider.")
+            notifyError("Cle vide", "Entre ta cle avant de valider.")
             return
         end
         validateAndLoad(savedKey)
@@ -289,8 +289,18 @@ Tab:CreateButton({
 })
 
 Tab:CreateSection("Informations")
-Tab:CreateLabel("HWID : " .. getHWID():sub(1, 16) .. "...")
-Tab:CreateLabel("Game ID : " .. getGameID())
+
+Tab:CreateDropdown({
+    Name            = "Infos",
+    Options         = {
+        "HWID : " .. getHWID():sub(1, 20) .. "...",
+        "Game ID : "  .. getGameID(),
+    },
+    CurrentOption   = {"HWID : " .. getHWID():sub(1, 20) .. "..."},
+    MultipleOptions = false,
+    Flag            = "InfoDropdown",
+    Callback        = function() end,
+})
 
 -- ─── FIN ─────────────────────────────────────────────────────────────────────
 Rayfield:LoadConfiguration()
