@@ -1,35 +1,23 @@
 --[[
-    YA HUB — Key System Loader (Roblox)
-    Sécurité : HMAC-SHA256 côté client + JWT one-time token + HWID lock
-    
-    COMMENT ÇA MARCHE :
-    1. L'utilisateur entre sa clé
-    2. On envoie clé + HWID + GameID + signature HMAC au serveur /validate
-    3. Le serveur retourne un JWT signé (valide 5 min, one-time)
-    4. On envoie ce JWT + HWID + GameID à /get_script
-    5. Le serveur vérifie tout et retourne l'URL du script + signature
-    6. On vérifie la signature de la réponse puis on charge le script
+    YA HUB - Key System Loader
+    API_URL et HMAC_SECRET a changer avant deploy
 --]]
 
--- ─── CONFIG ──────────────────────────────────────────────────────────────────
-local API_URL     = "https://api-ya-omega.vercel.app/"     -- ⚠️ Change ici
-local HMAC_SECRET = "PUOFZQGESQF454SGER6G4E64GE4GGG"  -- ⚠️ Doit correspondre à celui de l'API
+-- CONFIG
+local API_URL     = "https://api-ya-omega.vercel.app/"
+local HMAC_SECRET = "PUOFZQGESQF454SGER6G4E64GE4GGG"
 
--- ─── RAYFIELD ────────────────────────────────────────────────────────────────
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-
--- ─── UTILS ───────────────────────────────────────────────────────────────────
+-- SERVICES
+local Rayfield    = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 local HttpService = game:GetService("HttpService")
 local Players     = game:GetService("Players")
 
+-- HWID
 local function getHWID()
-    -- Les executors exposent généralement game:GetService("RbxAnalyticsService"):GetClientId()
-    -- ou une fonction native. On essaie plusieurs méthodes.
     local ok, hwid = pcall(function()
         return tostring(game:GetService("RbxAnalyticsService"):GetClientId())
     end)
     if ok and hwid and hwid ~= "" then return hwid end
-    -- Fallback : UserID (moins sécurisé mais toujours lié à l'utilisateur)
     return tostring(Players.LocalPlayer.UserId)
 end
 
@@ -37,12 +25,8 @@ local function getGameID()
     return tostring(game.PlaceId)
 end
 
--- ─── HMAC-SHA256 SIMPLIFIÉ ───────────────────────────────────────────────────
--- On utilise une implémentation pure Lua de SHA256 + HMAC
--- car les executors n'ont pas toujours crypto native.
-
+-- SHA256 pure Lua
 local function sha256(msg)
-    -- SHA-256 pure Lua (implémentation compacte)
     local function rrotate(x, n) return (x >> n) | (x << (32 - n)) end
     local K = {
         0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -108,22 +92,21 @@ local function hmacSha256(key, msg)
 end
 
 local function signPayload(key_str, hwid, game_id)
-    -- Reproduit le JSON trié : {"game_id":..., "hwid":..., "key":...}
     local raw = string.format('{"game_id":"%s","hwid":"%s","key":"%s"}', game_id, hwid, key_str)
     return hmacSha256(HMAC_SECRET, raw)
 end
 
--- ─── POST HELPER ─────────────────────────────────────────────────────────────
+-- HTTP POST
 local function httpPost(endpoint, payload)
     local ok, result = pcall(function()
         return HttpService:RequestAsync({
-            Url    = API_URL .. endpoint,
-            Method = "POST",
+            Url     = API_URL .. endpoint,
+            Method  = "POST",
             Headers = {["Content-Type"] = "application/json"},
-            Body   = HttpService:JSONEncode(payload),
+            Body    = HttpService:JSONEncode(payload),
         })
     end)
-    if not ok then return nil, "Erreur réseau" end
+    if not ok then return nil, "Erreur reseau" end
     if result.StatusCode ~= 200 then
         local msg = "Erreur serveur " .. tostring(result.StatusCode)
         local ok2, decoded = pcall(HttpService.JSONDecode, HttpService, result.Body)
@@ -131,20 +114,11 @@ local function httpPost(endpoint, payload)
         return nil, msg
     end
     local ok3, data = pcall(HttpService.JSONDecode, HttpService, result.Body)
-    if not ok3 then return nil, "Réponse invalide" end
+    if not ok3 then return nil, "Reponse invalide" end
     return data, nil
 end
 
--- ─── VERIFY RESPONSE SIGNATURE ───────────────────────────────────────────────
-local function verifyResponseSig(url, sig)
-    -- L'API signe {"ts":..., "url":...} avec HMAC_SECRET
-    -- On ne peut pas facilement recalculer côté Lua sans connaître le ts exact
-    -- → On fait confiance au HTTPS + JWT one-time pour la sécurité principale
-    -- Pour aller plus loin, expose un endpoint /pubkey avec une clé RSA publique
-    return true
-end
-
--- ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
+-- NOTIFICATIONS
 local function notifyError(title, content)
     Rayfield:Notify({
         Title    = title,
@@ -163,23 +137,24 @@ local function notifySuccess(title, content)
     })
 end
 
--- ─── KEY VALIDATION ──────────────────────────────────────────────────────────
+-- LOAD GAME SCRIPT
 local function loadGameScript(url)
     local ok, err = pcall(function()
         loadstring(game:HttpGet(url))()
     end)
     if not ok then
-        notifyError("❌ Erreur Script", "Impossible de charger le script : " .. tostring(err))
+        notifyError("Erreur Script", "Impossible de charger : " .. tostring(err))
     end
 end
 
+-- VALIDATE AND LOAD
 local function validateAndLoad(userKey)
     local hwid   = getHWID()
     local gameId = getGameID()
     local sig    = signPayload(userKey, hwid, gameId)
 
-    -- Étape 1 : Valider la clé
-    notifySuccess("🔑 Vérification...", "Validation de ta clé en cours...")
+    notifySuccess("Verification...", "Validation de ta cle en cours...")
+
     local data, err = httpPost("/validate", {
         key     = userKey,
         hwid    = hwid,
@@ -188,47 +163,44 @@ local function validateAndLoad(userKey)
     })
 
     if not data then
-        notifyError("❌ Erreur réseau", err or "Impossible de contacter le serveur")
+        notifyError("Erreur reseau", err or "Impossible de contacter le serveur")
         return
     end
 
     if not data.valid then
         local reasons = {
-            KEY_NOT_FOUND  = "Clé introuvable.",
-            KEY_REVOKED    = "Cette clé a été révoquée.",
-            KEY_EXPIRED    = "Cette clé a expiré.",
-            HWID_MISMATCH  = "Cette clé est liée à un autre appareil.\nContacte le support pour un reset HWID.",
+            KEY_NOT_FOUND = "Cle introuvable.",
+            KEY_REVOKED   = "Cette cle a ete revoquee.",
+            KEY_EXPIRED   = "Cette cle a expire.",
+            HWID_MISMATCH = "Cle liee a un autre appareil. Contacte le support.",
         }
-        local msg = reasons[data.reason] or ("Clé invalide : " .. tostring(data.reason))
-        notifyError("❌ Clé invalide", msg)
+        notifyError("Cle invalide", reasons[data.reason] or ("Raison : " .. tostring(data.reason)))
         return
     end
 
-    local jwtToken = data.jwt
+    notifySuccess("Cle valide !", "Chargement du script...")
 
-    -- Étape 2 : Récupérer le script
-    notifySuccess("✅ Clé valide !", "Chargement du script...")
     local scriptData, err2 = httpPost("/get_script", {
-        jwt_token = jwtToken,
+        jwt_token = data.jwt,
         hwid      = hwid,
         game_id   = gameId,
     })
 
     if not scriptData then
-        notifyError("❌ Erreur", err2 or "Impossible de récupérer le script")
+        notifyError("Erreur", err2 or "Impossible de recuperer le script")
         return
     end
 
     if not scriptData.url then
-        notifyError("❌ Jeu non supporté", "Aucun script disponible pour ce jeu.")
+        notifyError("Jeu non supporte", "Aucun script disponible pour ce jeu.")
         return
     end
 
-    notifySuccess("🚀 Chargement...", "Script en cours d'injection !")
+    notifySuccess("Chargement...", "Script en cours d'injection !")
     loadGameScript(scriptData.url)
 end
 
--- ─── UI RAYFIELD ─────────────────────────────────────────────────────────────
+-- UI RAYFIELD
 local Window = Rayfield:CreateWindow({
     Name                   = "YA HUB - LOADER",
     Icon                   = 0,
@@ -238,30 +210,31 @@ local Window = Rayfield:CreateWindow({
     Theme                  = "Bloom",
     ToggleUIKeybind        = "K",
     DisableRayfieldPrompts = false,
-    DisableBuildWarnings   = false,
+    DisableBuildWarnings   = false, -- virgule ici !
     ConfigurationSaving    = {
         Enabled    = true,
         FolderName = "YAHUB",
-        FileName   = "YAHUB"
+        FileName   = "YAHUB",
     },
     Discord = {
         Enabled       = true,
         Invite        = "X28Ffjm3Yb",
-        RememberJoins = true
+        RememberJoins = true,
     },
     KeySystem   = false,
     KeySettings = {
         Title           = "YA",
         Subtitle        = "Key System",
-        Note            = "Rejoins notre Discord pour obtenir une clé",
+        Note            = "Rejoins notre Discord pour obtenir une cle",
         FileName        = "Key",
         SaveKey         = true,
         GrabKeyFromSite = false,
-        Key             = {"Hello"}
-    }
+        Key             = {"Hello"},
+    },
 })
 
 local Tab = Window:CreateTab("KEY SYSTEM", 4483362458)
+
 Tab:CreateSection("Activation")
 
 local savedKey = ""
@@ -290,17 +263,7 @@ Tab:CreateButton({
 
 Tab:CreateSection("Informations")
 
-Tab:CreateDropdown({
-    Name            = "Infos",
-    Options         = {
-        "HWID : " .. getHWID():sub(1, 20) .. "...",
-        "Game ID : "  .. getGameID(),
-    },
-    CurrentOption   = {"HWID : " .. getHWID():sub(1, 20) .. "..."},
-    MultipleOptions = false,
-    Flag            = "InfoDropdown",
-    Callback        = function() end,
-})
+Tab:CreateLabel("HWID : " .. getHWID():sub(1, 24) .. "...", 4483362458)
+Tab:CreateLabel("Game ID : " .. getGameID(), 4483362458)
 
--- ─── FIN ─────────────────────────────────────────────────────────────────────
 Rayfield:LoadConfiguration()
