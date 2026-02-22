@@ -84,7 +84,15 @@ end
 -- ─── LOAD GAME SCRIPT ─────────────────────────────────────────────────────────
 local function loadGameScript(url)
     local ok, err = pcall(function()
-        loadstring(game:HttpGet(url))()
+        local content = game:HttpGet(url)
+        if not content or content == "" then
+            error("Contenu vide recu depuis : " .. tostring(url))
+        end
+        local fn, loadErr = loadstring(content)
+        if not fn then
+            error("loadstring a echoue : " .. tostring(loadErr))
+        end
+        fn()
     end)
     if not ok then
         notifyError("Erreur Script", tostring(err))
