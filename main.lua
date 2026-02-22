@@ -1,7 +1,6 @@
 --[[
     YA HUB - Key System Loader
     Compatible Lua 5.1 / bit32
-    Changer API_URL et HMAC_SECRET avant deploy
 --]]
 
 local API_URL     = "https://api-ya-omega.vercel.app"
@@ -12,12 +11,13 @@ local HttpService = game:GetService("HttpService")
 local Players     = game:GetService("Players")
 
 -- ─── BIT32 COMPAT ─────────────────────────────────────────────────────────────
-local band    = bit32 and bit32.band    or bit.band
-local bxor    = bit32 and bit32.bxor    or bit.bxor
-local bor     = bit32 and bit32.bor     or bit.bor
-local bnot    = bit32 and bit32.bnot    or bit.bnot
-local rshift  = bit32 and bit32.rshift  or bit.rshift
-local lshift  = bit32 and bit32.lshift  or bit.lshift
+local band   = bit32 and bit32.band   or bit.band
+local bxor   = bit32 and bit32.bxor   or bit.bxor
+local bor    = bit32 and bit32.bor    or bit.bor
+local bnot   = bit32 and bit32.bnot   or bit.bnot
+local rshift = bit32 and bit32.rshift or bit.rshift
+local lshift = bit32 and bit32.lshift or bit.lshift
+
 local function rrotate(x, n)
     return bor(rshift(x, n), lshift(x, 32 - n))
 end
@@ -25,7 +25,7 @@ local function u32(x)
     return band(x, 0xFFFFFFFF)
 end
 
--- ─── SHA256 Lua 5.1 compatible ────────────────────────────────────────────────
+-- ─── SHA256 ───────────────────────────────────────────────────────────────────
 local SHA256_K = {
     0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
     0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -39,28 +39,23 @@ local SHA256_K = {
 
 local function sha256(msg)
     local h = {
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+        0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
+        0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19,
     }
-
-    -- padding
     local len = #msg
     msg = msg .. "\x80"
     while #msg % 64 ~= 56 do msg = msg .. "\x00" end
-    -- append length in bits as 64-bit big-endian (we only handle < 2^32 bytes)
     local bits = len * 8
-    msg = msg .. "\x00\x00\x00\x00"
-    msg = msg .. string.char(
+    msg = msg .. "\x00\x00\x00\x00" .. string.char(
         band(rshift(bits, 24), 0xFF),
         band(rshift(bits, 16), 0xFF),
         band(rshift(bits,  8), 0xFF),
         band(bits, 0xFF)
     )
-
     for i = 1, #msg, 64 do
         local w = {}
         for j = 0, 15 do
-            local b1, b2, b3, b4 = string.byte(msg, i+j*4, i+j*4+3)
+            local b1,b2,b3,b4 = string.byte(msg, i+j*4, i+j*4+3)
             w[j+1] = bor(lshift(b1,24), lshift(b2,16), lshift(b3,8), b4)
         end
         for j = 17, 64 do
@@ -68,10 +63,7 @@ local function sha256(msg)
             local s1 = bxor(rrotate(w[j-2],17), rrotate(w[j-2],19),  rshift(w[j-2],10))
             w[j] = u32(w[j-16] + s0 + w[j-7] + s1)
         end
-
-        local a,b,c,d,e,f,g,hh =
-            h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[8]
-
+        local a,b,c,d,e,f,g,hh = h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[8]
         for j = 1, 64 do
             local S1  = bxor(rrotate(e,6), rrotate(e,11), rrotate(e,25))
             local ch  = bxor(band(e,f), band(bnot(e),g))
@@ -82,24 +74,17 @@ local function sha256(msg)
             hh=g; g=f; f=e; e=u32(d+tmp1)
             d=c;  c=b; b=a; a=u32(tmp1+tmp2)
         end
-
-        h[1]=u32(h[1]+a); h[2]=u32(h[2]+b)
-        h[3]=u32(h[3]+c); h[4]=u32(h[4]+d)
-        h[5]=u32(h[5]+e); h[6]=u32(h[6]+f)
-        h[7]=u32(h[7]+g); h[8]=u32(h[8]+hh)
+        h[1]=u32(h[1]+a); h[2]=u32(h[2]+b); h[3]=u32(h[3]+c); h[4]=u32(h[4]+d)
+        h[5]=u32(h[5]+e); h[6]=u32(h[6]+f); h[7]=u32(h[7]+g); h[8]=u32(h[8]+hh)
     end
-
     local out = ""
-    for _, v in ipairs(h) do
-        out = out .. string.format("%08x", v)
-    end
+    for _,v in ipairs(h) do out = out .. string.format("%08x", v) end
     return out
 end
 
 local function hmacSha256(key, msg)
     local BLOCK = 64
     if #key > BLOCK then key = sha256(key) end
-    -- convert hex string back to bytes if needed
     local ipad, opad = "", ""
     for i = 1, BLOCK do
         local k = i <= #key and string.byte(key, i) or 0
@@ -109,11 +94,11 @@ local function hmacSha256(key, msg)
     return sha256(opad .. sha256(ipad .. msg))
 end
 
+-- ─── SIGN PAYLOAD ─────────────────────────────────────────────────────────────
+-- Reproduit exactement json.dumps(payload, sort_keys=True) de Python
+-- Ordre alphabétique des clés : game_id, hwid, key
 local function signPayload(key_str, hwid, game_id)
-    -- JSON trié par clé (sort_keys=True Python) : game_id, hwid, key
-    -- On échappe les caractères qui pourraient casser le JSON
-    local function esc(s) return tostring(s):gsub('\', '\\'):gsub('"', '\"') end
-    local raw = string.format('{"game_id":"%s","hwid":"%s","key":"%s"}', esc(game_id), esc(hwid), esc(key_str))
+    local raw = '{"game_id":"' .. tostring(game_id) .. '","hwid":"' .. tostring(hwid) .. '","key":"' .. tostring(key_str) .. '"}'
     return hmacSha256(HMAC_SECRET, raw)
 end
 
@@ -130,12 +115,11 @@ local function getGameID()
     return tostring(game.PlaceId)
 end
 
--- HTTP POST (compatible tous executors)
+-- ─── HTTP POST ────────────────────────────────────────────────────────────────
 local function httpPost(endpoint, payload)
     local body = HttpService:JSONEncode(payload)
     local url  = API_URL .. endpoint
 
-    -- Méthode 1 : request() — Synapse, KRNL, Delta, Fluxus
     local ok, result = pcall(function()
         return request({
             Url     = url,
@@ -145,7 +129,6 @@ local function httpPost(endpoint, payload)
         })
     end)
 
-    -- Méthode 2 : http.request() — fallback
     if not ok then
         ok, result = pcall(function()
             return http.request({
@@ -157,7 +140,6 @@ local function httpPost(endpoint, payload)
         end)
     end
 
-    -- Méthode 3 : HttpService:RequestAsync() — dernier recours
     if not ok then
         ok, result = pcall(function()
             return HttpService:RequestAsync({
@@ -179,8 +161,7 @@ local function httpPost(endpoint, payload)
         return nil, msg
     end
 
-    local respBody = result.Body or result.body or ""
-    local ok3, data = pcall(HttpService.JSONDecode, HttpService, respBody)
+    local ok3, data = pcall(HttpService.JSONDecode, HttpService, result.Body or result.body or "")
     if not ok3 then return nil, "Reponse invalide" end
     return data, nil
 end
