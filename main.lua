@@ -1,18 +1,121 @@
 --[[
     YA HUB - Key System Loader
-    API_URL et HMAC_SECRET a changer avant deploy
+    Compatible Lua 5.1 / bit32
+    Changer API_URL et HMAC_SECRET avant deploy
 --]]
 
--- CONFIG
 local API_URL     = "https://api-ya-omega.vercel.app/"
 local HMAC_SECRET = "PUOFZQGESQF454SGER6G4E64GE4GGG"
 
--- SERVICES
 local Rayfield    = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 local HttpService = game:GetService("HttpService")
 local Players     = game:GetService("Players")
 
--- HWID
+-- ─── BIT32 COMPAT ─────────────────────────────────────────────────────────────
+local band    = bit32 and bit32.band    or bit.band
+local bxor    = bit32 and bit32.bxor    or bit.bxor
+local bor     = bit32 and bit32.bor     or bit.bor
+local bnot    = bit32 and bit32.bnot    or bit.bnot
+local rshift  = bit32 and bit32.rshift  or bit.rshift
+local lshift  = bit32 and bit32.lshift  or bit.lshift
+local function rrotate(x, n)
+    return bor(rshift(x, n), lshift(x, 32 - n))
+end
+local function u32(x)
+    return band(x, 0xFFFFFFFF)
+end
+
+-- ─── SHA256 Lua 5.1 compatible ────────────────────────────────────────────────
+local SHA256_K = {
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2,
+}
+
+local function sha256(msg)
+    local h = {
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    }
+
+    -- padding
+    local len = #msg
+    msg = msg .. "\x80"
+    while #msg % 64 ~= 56 do msg = msg .. "\x00" end
+    -- append length in bits as 64-bit big-endian (we only handle < 2^32 bytes)
+    local bits = len * 8
+    msg = msg .. "\x00\x00\x00\x00"
+    msg = msg .. string.char(
+        band(rshift(bits, 24), 0xFF),
+        band(rshift(bits, 16), 0xFF),
+        band(rshift(bits,  8), 0xFF),
+        band(bits, 0xFF)
+    )
+
+    for i = 1, #msg, 64 do
+        local w = {}
+        for j = 0, 15 do
+            local b1, b2, b3, b4 = string.byte(msg, i+j*4, i+j*4+3)
+            w[j+1] = bor(lshift(b1,24), lshift(b2,16), lshift(b3,8), b4)
+        end
+        for j = 17, 64 do
+            local s0 = bxor(rrotate(w[j-15],7), rrotate(w[j-15],18), rshift(w[j-15],3))
+            local s1 = bxor(rrotate(w[j-2],17), rrotate(w[j-2],19),  rshift(w[j-2],10))
+            w[j] = u32(w[j-16] + s0 + w[j-7] + s1)
+        end
+
+        local a,b,c,d,e,f,g,hh =
+            h[1],h[2],h[3],h[4],h[5],h[6],h[7],h[8]
+
+        for j = 1, 64 do
+            local S1  = bxor(rrotate(e,6), rrotate(e,11), rrotate(e,25))
+            local ch  = bxor(band(e,f), band(bnot(e),g))
+            local tmp1 = u32(hh + S1 + ch + SHA256_K[j] + w[j])
+            local S0  = bxor(rrotate(a,2), rrotate(a,13), rrotate(a,22))
+            local maj = bxor(band(a,b), band(a,c), band(b,c))
+            local tmp2 = u32(S0 + maj)
+            hh=g; g=f; f=e; e=u32(d+tmp1)
+            d=c;  c=b; b=a; a=u32(tmp1+tmp2)
+        end
+
+        h[1]=u32(h[1]+a); h[2]=u32(h[2]+b)
+        h[3]=u32(h[3]+c); h[4]=u32(h[4]+d)
+        h[5]=u32(h[5]+e); h[6]=u32(h[6]+f)
+        h[7]=u32(h[7]+g); h[8]=u32(h[8]+hh)
+    end
+
+    local out = ""
+    for _, v in ipairs(h) do
+        out = out .. string.format("%08x", v)
+    end
+    return out
+end
+
+local function hmacSha256(key, msg)
+    local BLOCK = 64
+    if #key > BLOCK then key = sha256(key) end
+    -- convert hex string back to bytes if needed
+    local ipad, opad = "", ""
+    for i = 1, BLOCK do
+        local k = i <= #key and string.byte(key, i) or 0
+        ipad = ipad .. string.char(bxor(k, 0x36))
+        opad = opad .. string.char(bxor(k, 0x5C))
+    end
+    return sha256(opad .. sha256(ipad .. msg))
+end
+
+local function signPayload(key_str, hwid, game_id)
+    -- JSON trié par clé : game_id, hwid, key
+    local raw = string.format('{"game_id":"%s","hwid":"%s","key":"%s"}', game_id, hwid, key_str)
+    return hmacSha256(HMAC_SECRET, raw)
+end
+
+-- ─── UTILS ────────────────────────────────────────────────────────────────────
 local function getHWID()
     local ok, hwid = pcall(function()
         return tostring(game:GetService("RbxAnalyticsService"):GetClientId())
@@ -25,78 +128,7 @@ local function getGameID()
     return tostring(game.PlaceId)
 end
 
--- SHA256 pure Lua
-local function sha256(msg)
-    local function rrotate(x, n) return (x >> n) | (x << (32 - n)) end
-    local K = {
-        0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-        0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-        0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-        0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-        0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-        0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-        0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-        0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
-    }
-    local h = {0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19}
-    local function pad(m)
-        local len = #m
-        m = m .. "\x80"
-        while (#m % 64) ~= 56 do m = m .. "\x00" end
-        for i = 7, 0, -1 do m = m .. string.char((len * 8 >> (i * 8)) & 0xFF) end
-        return m
-    end
-    msg = pad(msg)
-    for i = 1, #msg, 64 do
-        local w = {}
-        for j = 1, 16 do
-            local a,b,c,d = msg:byte(i+j*4-4, i+j*4-1)
-            w[j] = (a<<24)|(b<<16)|(c<<8)|d
-        end
-        for j = 17, 64 do
-            local s0 = rrotate(w[j-15],7)~rrotate(w[j-15],18)~(w[j-15]>>3)
-            local s1 = rrotate(w[j-2],17)~rrotate(w[j-2],19)~(w[j-2]>>10)
-            w[j] = (w[j-16]+s0+w[j-7]+s1) & 0xFFFFFFFF
-        end
-        local a,b,c,d,e,f,g,hh = table.unpack(h)
-        for j = 1, 64 do
-            local S1 = rrotate(e,6)~rrotate(e,11)~rrotate(e,25)
-            local ch = (e&f)~((~e)&g)
-            local tmp1 = (hh+S1+ch+K[j]+w[j]) & 0xFFFFFFFF
-            local S0 = rrotate(a,2)~rrotate(a,13)~rrotate(a,22)
-            local maj = (a&b)~(a&c)~(b&c)
-            local tmp2 = (S0+maj) & 0xFFFFFFFF
-            hh=g; g=f; f=e; e=(d+tmp1)&0xFFFFFFFF
-            d=c; c=b; b=a; a=(tmp1+tmp2)&0xFFFFFFFF
-        end
-        h[1]=(h[1]+a)&0xFFFFFFFF; h[2]=(h[2]+b)&0xFFFFFFFF
-        h[3]=(h[3]+c)&0xFFFFFFFF; h[4]=(h[4]+d)&0xFFFFFFFF
-        h[5]=(h[5]+e)&0xFFFFFFFF; h[6]=(h[6]+f)&0xFFFFFFFF
-        h[7]=(h[7]+g)&0xFFFFFFFF; h[8]=(h[8]+hh)&0xFFFFFFFF
-    end
-    local res = ""
-    for _,v in ipairs(h) do res = res .. string.format("%08x", v) end
-    return res
-end
-
-local function hmacSha256(key, msg)
-    local blocksize = 64
-    if #key > blocksize then key = sha256(key) end
-    local ipad, opad = "", ""
-    for i = 1, blocksize do
-        local k = i <= #key and key:byte(i) or 0
-        ipad = ipad .. string.char(k ~ 0x36)
-        opad = opad .. string.char(k ~ 0x5C)
-    end
-    return sha256(opad .. sha256(ipad .. msg))
-end
-
-local function signPayload(key_str, hwid, game_id)
-    local raw = string.format('{"game_id":"%s","hwid":"%s","key":"%s"}', game_id, hwid, key_str)
-    return hmacSha256(HMAC_SECRET, raw)
-end
-
--- HTTP POST
+-- ─── HTTP POST ────────────────────────────────────────────────────────────────
 local function httpPost(endpoint, payload)
     local ok, result = pcall(function()
         return HttpService:RequestAsync({
@@ -118,36 +150,25 @@ local function httpPost(endpoint, payload)
     return data, nil
 end
 
--- NOTIFICATIONS
+-- ─── NOTIFICATIONS ────────────────────────────────────────────────────────────
 local function notifyError(title, content)
-    Rayfield:Notify({
-        Title    = title,
-        Content  = content,
-        Duration = 7,
-        Image    = 4483362458,
-    })
+    Rayfield:Notify({ Title = title, Content = content, Duration = 7, Image = 4483362458 })
 end
-
 local function notifySuccess(title, content)
-    Rayfield:Notify({
-        Title    = title,
-        Content  = content,
-        Duration = 5,
-        Image    = 4483362458,
-    })
+    Rayfield:Notify({ Title = title, Content = content, Duration = 5, Image = 4483362458 })
 end
 
--- LOAD GAME SCRIPT
+-- ─── LOAD GAME SCRIPT ─────────────────────────────────────────────────────────
 local function loadGameScript(url)
     local ok, err = pcall(function()
         loadstring(game:HttpGet(url))()
     end)
     if not ok then
-        notifyError("Erreur Script", "Impossible de charger : " .. tostring(err))
+        notifyError("Erreur Script", tostring(err))
     end
 end
 
--- VALIDATE AND LOAD
+-- ─── VALIDATE AND LOAD ────────────────────────────────────────────────────────
 local function validateAndLoad(userKey)
     local hwid   = getHWID()
     local gameId = getGameID()
@@ -174,7 +195,7 @@ local function validateAndLoad(userKey)
             KEY_EXPIRED   = "Cette cle a expire.",
             HWID_MISMATCH = "Cle liee a un autre appareil. Contacte le support.",
         }
-        notifyError("Cle invalide", reasons[data.reason] or ("Raison : " .. tostring(data.reason)))
+        notifyError("Cle invalide", reasons[data.reason] or tostring(data.reason))
         return
     end
 
@@ -192,15 +213,15 @@ local function validateAndLoad(userKey)
     end
 
     if not scriptData.url then
-        notifyError("Jeu non supporte", "Aucun script disponible pour ce jeu.")
+        notifyError("Jeu non supporte", "Aucun script pour ce jeu.")
         return
     end
 
-    notifySuccess("Chargement...", "Script en cours d'injection !")
+    notifySuccess("Chargement...", "Injection en cours !")
     loadGameScript(scriptData.url)
 end
 
--- UI RAYFIELD
+-- ─── UI RAYFIELD ──────────────────────────────────────────────────────────────
 local Window = Rayfield:CreateWindow({
     Name                   = "YA HUB - LOADER",
     Icon                   = 0,
@@ -210,7 +231,7 @@ local Window = Rayfield:CreateWindow({
     Theme                  = "Bloom",
     ToggleUIKeybind        = "K",
     DisableRayfieldPrompts = false,
-    DisableBuildWarnings   = false, -- virgule ici !
+    DisableBuildWarnings   = false,
     ConfigurationSaving    = {
         Enabled    = true,
         FolderName = "YAHUB",
@@ -262,7 +283,6 @@ Tab:CreateButton({
 })
 
 Tab:CreateSection("Informations")
-
 Tab:CreateLabel("HWID : " .. getHWID():sub(1, 24) .. "...", 4483362458)
 Tab:CreateLabel("Game ID : " .. getGameID(), 4483362458)
 
