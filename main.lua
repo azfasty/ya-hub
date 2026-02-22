@@ -214,4 +214,8 @@ Tab:CreateSection("Informations")
 Tab:CreateLabel("HWID : " .. getHWID():sub(1, 24) .. "...", 4483362458)
 Tab:CreateLabel("Game ID : " .. getGameID(), 4483362458)
 
+local GamesTab = Window:CreateTab("Games", 4483362458)
+local JJLabel = Tab:CreateLabel("Jujutsu Infinite", 4483362458, Color3.fromRGB(255, 255, 255), false) -- Title, Icon, Color, IgnoreTheme
+local UDJJLabel = Tab:CreateLabel("Undetected", 4483362458, Color3.fromRGB(0, 255, 82), false) -- Title, Icon, Color, IgnoreTheme
+local Divider1 = Tab:CreateDivider()
 Rayfield:LoadConfiguration()
