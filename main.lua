@@ -141,7 +141,7 @@ local function validateAndLoad(userKey)
     end
 
     if not scriptData.url then
-        notifyError("Jeu non supporte", "Aucun script pour ce jeu.")
+        notifyError("Game not supported", "No script for this game.")
         return
     end
 
@@ -156,7 +156,7 @@ local Window = Rayfield:CreateWindow({
     LoadingTitle           = "YA HUB is loading...",
     LoadingSubtitle        = "by Artemis & YouYou",
     ShowText               = "YA",
-    Theme                  = "AmberGlow",
+    Theme                  = "Amethyst",
     ToggleUIKeybind        = "K",
     DisableRayfieldPrompts = false,
     DisableBuildWarnings   = false,
