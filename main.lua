@@ -103,7 +103,7 @@ end
 local function validateAndLoad(userKey)
     local hwid   = getHWID()
     local gameId = getGameID()
-    notifySuccess("Verification...", "Validation de ta cle en cours...")
+    notifySuccess("Verification...", "Checking you key...")
 
     local data, err = httpPost("/validate", {
         key     = userKey,
@@ -118,16 +118,16 @@ local function validateAndLoad(userKey)
 
     if not data.valid then
         local reasons = {
-            KEY_NOT_FOUND = "Cle introuvable.",
-            KEY_REVOKED   = "Cette cle a ete revoquee.",
-            KEY_EXPIRED   = "Cette cle a expire.",
-            HWID_MISMATCH = "Cle liee a un autre appareil. Contacte le support.",
+            KEY_NOT_FOUND = "KEY INVALID.",
+            KEY_REVOKED   = "KEY REVOKED.",
+            KEY_EXPIRED   = "KEY EXPIRED.",
+            HWID_MISMATCH = "HWID MISMATCH, create a ticket on discord.",
         }
-        notifyError("Cle invalide", reasons[data.reason] or tostring(data.reason))
+        notifyError("INVALID KEY", reasons[data.reason] or tostring(data.reason))
         return
     end
 
-    notifySuccess("Cle valide !", "Chargement du script...")
+    notifySuccess("KEY VALID !", "Loading script...")
 
     local scriptData, err2 = httpPost("/get_script", {
         jwt_token = data.jwt,
@@ -145,7 +145,7 @@ local function validateAndLoad(userKey)
         return
     end
 
-    notifySuccess("Chargement...", "Injection en cours !")
+    notifySuccess("Loading...", "Injection...")
     loadGameScript(scriptData.url)
 end
 
@@ -189,7 +189,7 @@ Tab:CreateSection("Activation")
 local savedKey = ""
 
 Tab:CreateInput({
-    Name                     = "Entrez votre cle",
+    Name                     = "Enter your key",
     CurrentValue             = "",
     PlaceholderText          = "LIFETIME-XXXX / MONTH-XXXX / WEEK-XXXX / 8H-XXXX",
     RemoveTextAfterFocusLost = false,
@@ -200,10 +200,10 @@ Tab:CreateInput({
 })
 
 Tab:CreateButton({
-    Name     = "Valider la cle",
+    Name     = "Check KEY",
     Callback = function()
         if savedKey == "" then
-            notifyError("Cle vide", "Entre ta cle avant de valider.")
+            notifyError("INVALID", "Enter your key before checking.")
             return
         end
         validateAndLoad(savedKey)
