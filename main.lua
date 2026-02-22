@@ -4,7 +4,7 @@
     Changer API_URL et HMAC_SECRET avant deploy
 --]]
 
-local API_URL     = "https://api-ya-omega.vercel.app/"
+local API_URL     = "https://api-ya-omega.vercel.app"
 local HMAC_SECRET = "PUOFZQGESQF454SGER6G4E64GE4GGG"
 
 local Rayfield    = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
